@@ -22,22 +22,19 @@ namespace PFire.Core.Protocol.Messages.Inbound
             var user = await context.Server.Database.QueryUser(Username);
             if (user != null)
             {
-                if (user.Password != Password)
+                if (!BCrypt.Net.BCrypt.Verify(Password, user.Password))
                 {
                     await context.SendAndProcessMessage(new LoginFailure());
-
                     return;
                 }
             }
             else
             {
-                user = await context.Server.Database.InsertUser(Username, Password, context.Salt);
+                var hashPassword = BCrypt.Net.BCrypt.HashPassword(Password);
+                user = await context.Server.Database.InsertUser(Username, hashPassword, context.Salt);
             }
 
-            // Remove any older sessions from this user (duplicate logins)
-            context.RemoveDuplicatedSessions(user);
-
-            context.User = user;
+            await context.StartSession(user);
 
             var success = new LoginSuccess();
             await context.SendAndProcessMessage(success);
